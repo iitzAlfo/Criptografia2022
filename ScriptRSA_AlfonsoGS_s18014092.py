@@ -1,11 +1,14 @@
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 from importlib.resources import path
 
 import gmpy2, os, binascii, argparse  
    
 def GenerateKeys(pathSalida):
+    """Funcion que genera las llaves"""
         # Generar llave privada
     private_key = rsa.generate_private_key(
         public_exponent=65537,
@@ -40,52 +43,48 @@ def GenerateKeys(pathSalida):
     File_PublicK.close
     print('Se crearon las llaves en el directorio') 
     
-def simple_rsa_encrypt(m, publickey):
-    # public_numbers regresa una estructura de datos con 'e' y 'n'
-    numbers = publickey.public_numbers()
-    # el cifrado es (m ** e) % n
-    return gmpy2.powmod(m, numbers.e, numbers.n)  
-  
-def simple_rsa_decrypt(c, privatekey):
-    # private_numbers regresa una estructura de datos con 'd' y 'n'
-    numbers = privatekey.private_numbers()
-    # el descifrado es (c ** d) % n
-    return gmpy2.powmod(c, numbers.d, numbers.public_numbers.n) 
 
-def int_to_bytes(i):
-    # asegurarse de que es un entero python
-    i = int(i)
-    return i.to_bytes((i.bit_length()+7)//8, byteorder='big')   
+  
     
 def cifrararchivos(path_Key, Path_arch):
+    """Funcion que cifra contenido de un archivo con padding"""
     #Obtencion de la llave atra vez del archivo PEM
     public_key_bytes = open(path_Key, 'rb').read()
     public_key = serialization.load_pem_public_key(
     public_key_bytes,
     backend=default_backend())
     file = open(Path_arch, 'rb').read()
-    int_mensaje = int.from_bytes(file, byteorder='big')
-    cifrado = simple_rsa_encrypt(int_mensaje, public_key)
-    cifrado = str(cifrado)
+    #int_mensaje = int.from_bytes(file, byteorder='big')
+    cifrado = public_key.encrypt(
+        file,
+        padding.OAEP(
+            mgf = padding.MGF1(algorithm = hashes.SHA256()),
+            algorithm = hashes.SHA256(),
+        label= None))
+    #cifrado = str(cifrado)
     #bytes_mensaje= int_mensaje(cifrado)
-    File_encryp = open('FileEncryp.txt', 'w+')
+    File_encryp = open('FileEncryp.txt', 'wb+')
     File_encryp.write(cifrado)
     File_encryp.close()
     print('Se encripto correctamente') 
     
 def descifrararchivos(path_key, Path_arch):
+    """Funcion que descifra archivos"""
     private_key_bytes = open(path_key, 'rb').read()
     private_key = serialization.load_pem_private_key(
         private_key_bytes,
         backend=default_backend(),
         password=None) 
     FileEncryp = open(Path_arch, 'rb').read()
-    FileEncryp = int(FileEncryp)
-    decifrar = simple_rsa_decrypt(FileEncryp, private_key)
-    bytes_mensaje = int_to_bytes(decifrar)
-    bytes_mensaje = str(bytes_mensaje)
+    decifrar = private_key.decrypt(
+        FileEncryp,
+        padding.OAEP(
+            mgf= padding.MGF1(algorithm = hashes.SHA256()),
+            algorithm = hashes.SHA256(),
+        label = None))
+    decifrar = str(decifrar)
     File = open('FileDesencryp.txt', 'w+')
-    File.write(bytes_mensaje)
+    File.write(decifrar)
     File.close()
     print('Se desencripto correctamente')  
    
@@ -95,13 +94,21 @@ def descifrararchivos(path_key, Path_arch):
 
 if __name__ == '__main__':
     all_args =  argparse.ArgumentParser()
-    all_args.add_argument("-o", "--operacion", help="Operacion a realizar", required=True)
-    all_args.add_argument("-p", "--path", help="Path de salida de sus llaves", required=True)
-    all_args.add_argument("-a", "--archivo", help="Archivo para Encriptar/Desencriptar" required=True)
+    all_args.add_argument("-o", "--operacion", help="Operacion a realizar, cllaves, cifrar,descifrar", required=True)
+    all_args.add_argument("-p", "--path", help="Path de salida de sus llaves o entrada si va a descifrar", required=True)
+    all_args.add_argument("-a", "--archivo", help="Archivo para Encriptar/Desencriptar")
     args = vars(all_args.parse_args())
     operacion = args['operacion']
-    #GenerateKeys(args['path'])
-    #cifrararchivos(args['path'], args['archivo'])
-    descifrararchivos(args['path'], args['archivo'])
+    if operacion == 'cllaves':
+        GenerateKeys(args['path'])
+    if operacion == 'cifrar':
+        cifrararchivos(args['path'], args['archivo'])
+    if operacion == 'descifrar':
+        descifrararchivos(args['path'], args['archivo'])
+        
+        
+
+
+
 
 
